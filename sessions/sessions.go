@@ -1,6 +1,9 @@
 package sessions
 
 import (
+	"context"
+	"encoding/json"
+
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
 )
@@ -22,4 +25,31 @@ func NewSessionManager() *SessionManager {
 	return &SessionManager{
 		client: rdb,
 	}
+}
+
+func (sm *SessionManager) GetSession(id string) (*Session, error) {
+	val, err := sm.client.Get(context.Background(), id).Bytes()
+	if err != nil {
+		return nil, err
+	}
+
+	var s Session
+	if err := json.Unmarshal(val, &s); err != nil {
+		return nil, err
+	}
+
+	return &s, nil
+}
+
+func (sm *SessionManager) DeleteSession(id string) error {
+	return sm.client.Del(context.Background(), id).Err()
+}
+
+func (sm *SessionManager) CreateSession(s Session) error {
+	data, err := json.Marshal(s)
+	if err != nil {
+		return err
+	}
+
+	return sm.client.Set(context.Background(), s.RegistrationID, data, 0).Err()
 }

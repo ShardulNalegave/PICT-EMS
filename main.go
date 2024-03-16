@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/ShardulNalegave/PICT-EMS/database"
+	"github.com/ShardulNalegave/PICT-EMS/routes"
 	"github.com/ShardulNalegave/PICT-EMS/sessions"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
@@ -25,6 +26,7 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(database.DatabaseMiddleware(db))
 	r.Use(sessions.SessionManagerMiddleware(sm))
+	r.Mount("/", routes.GetRouter())
 
 	log.Info().
 		Str("Addr", ADDR).
