@@ -47,28 +47,19 @@ func createSession(w http.ResponseWriter, r *http.Request) {
 
 	var body struct {
 		RegistrationID string `json:"registration_id"`
-		Kind           string `json:"kind"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if body.Kind == "student" {
-		var student models.Student
-		if err := db.First(&student, "registration_id = ?", body.RegistrationID).Error; err != nil {
-			http.Error(w, "Student with given RegistrationID doesn't exist", http.StatusNotFound)
-			return
-		}
-	} else if body.Kind == "staff" {
+	var student models.Student
+	if err := db.First(&student, "registration_id = ?", body.RegistrationID).Error; err != nil {
 		var staffMember models.StaffMember
 		if err := db.First(&staffMember, "registration_id = ?", body.RegistrationID).Error; err != nil {
-			http.Error(w, "Staff-Member with given RegistrationID doesn't exist", http.StatusNotFound)
+			http.Error(w, "No one with given RegistrationID exists", http.StatusNotFound)
 			return
 		}
-	} else {
-		http.Error(w, "'kind' not provided in request body", http.StatusBadRequest)
-		return
 	}
 
 	s := sessions.Session{

@@ -1,0 +1,33 @@
+package templates
+
+templ HomeView() {
+  @Layout() {
+    <div data-bs-theme="dark">
+      <h3 style="color: #FFFFFF;">PICT Library</h3>
+      <div style="height: 20px;" />
+      <form id="submitForm">
+        <div class="input-group mb-3">
+          <input type="text" id="reg-id" class="form-control" placeholder="Registration ID" aria-label="Registration ID" aria-describedby="enter-btn" />
+          <button class="btn btn-primary" type="submit" id="enter-btn">Enter</button>
+        </div>
+      </form>
+      <div class="btn-group" role="group" aria-label="Basic example">
+        <button type="button" class="btn btn-success">End Day</button>
+      </div>
+    </div>
+
+    <script>
+      document.getElementById("submitForm").addEventListener("submit", (e) => {
+        e.preventDefault()
+        let regID = document.getElementById("reg-id").value
+        axios.post("/sessions", {
+          registration_id: regID,
+        }).then(res => {
+          console.log(res.data)
+        }).catch(err => {
+          console.error(err)
+        })
+      })
+    </script>
+  }
+}
