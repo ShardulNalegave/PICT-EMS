@@ -12,21 +12,28 @@ templ HomeView() {
         </div>
       </form>
       <div class="btn-group" role="group" aria-label="Basic example">
-        <button type="button" class="btn btn-success">End Day</button>
+        <button type="button" class="btn btn-success" id="endDayBtn">End Day</button>
+        <a type="button" href="/generate-report" class="btn btn-secondary">Generate Report</a>
       </div>
     </div>
 
     <script>
       document.getElementById("submitForm").addEventListener("submit", (e) => {
         e.preventDefault()
-        let regID = document.getElementById("reg-id").value
+        let regID = document.getElementById("reg-id")
         axios.post("/sessions", {
-          registration_id: regID,
+          registration_id: regID.value,
         }).then(res => {
           console.log(res.data)
+          regID.value = ""
         }).catch(err => {
           console.error(err)
+          regID.value = ""
         })
+      })
+
+      document.getElementById("endDayBtn").addEventListener("click", () => {
+        axios.post("/sessions/end-day", {}).then(res => console.log(res)).catch(err => console.error(err))
       })
     </script>
   }

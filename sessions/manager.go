@@ -3,6 +3,7 @@ package sessions
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
@@ -51,5 +52,13 @@ func (sm *SessionManager) CreateSession(s Session) error {
 		return err
 	}
 
-	return sm.client.Set(context.Background(), s.RegistrationID, data, 0).Err()
+	return sm.client.Set(context.Background(), s.SessionID, data, 0).Err()
+}
+
+func (sm *SessionManager) GetSessionKeys(loc string) ([]string, error) {
+	keys, err := sm.client.Keys(context.Background(), fmt.Sprintf("*-%s", loc)).Result()
+	if err != nil {
+		return nil, err
+	}
+	return keys, nil
 }

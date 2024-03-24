@@ -8,4 +8,5 @@ import (
 
 func initTemplatesRouter(r *chi.Mux) {
 	r.Mount("/", templ.Handler(templates.HomeView()))
+	r.Mount("/generate-report", templ.Handler(templates.ReportsView()))
 }

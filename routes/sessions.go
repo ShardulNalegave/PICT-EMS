@@ -2,48 +2,47 @@ package routes
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/ShardulNalegave/PICT-EMS/database/models"
 	"github.com/ShardulNalegave/PICT-EMS/sessions"
+	"github.com/ShardulNalegave/PICT-EMS/tsdb"
 	"github.com/ShardulNalegave/PICT-EMS/utils"
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
 func initSessionRoutes(r *chi.Mux) {
-	r.Get("/sessions/{reg_id}", getSession)
-	r.Delete("/sessions/{reg_id}", deleteSession)
-	r.Post("/sessions", createSession)
+	r.Post("/sessions", createOrEndSessionHandler)
+	r.Post("/sessions/end-day", endDay)
 }
 
-func getSession(w http.ResponseWriter, r *http.Request) {
+func endDay(w http.ResponseWriter, r *http.Request) {
+	t := r.Context().Value(utils.TSDBKey).(*tsdb.TSDB)
 	sm := r.Context().Value(utils.SessionManagerKey).(*sessions.SessionManager)
+	loc := r.Context().Value(utils.LocationKey).(string)
 
-	s, err := sm.GetSession(chi.URLParam(r, "reg_id"))
+	keys, err := sm.GetSessionKeys(loc)
 	if err != nil {
-		if err == redis.Nil {
-			http.Error(w, "Session doesn't exist", http.StatusNotFound)
-			return
-		} else {
-			http.Error(w, "Couldn't get session record", http.StatusInternalServerError)
-			return
-		}
+		http.Error(w, "Couldn't get session keys", http.StatusInternalServerError)
+		return
 	}
 
-	data, _ := json.Marshal(s)
+	for _, key := range keys {
+		_ = endSession(t, sm, key)
+	}
 
-	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(data)
+	w.Write([]byte("Done"))
 }
 
-func createSession(w http.ResponseWriter, r *http.Request) {
+func createOrEndSessionHandler(w http.ResponseWriter, r *http.Request) {
+	t := r.Context().Value(utils.TSDBKey).(*tsdb.TSDB)
 	db := r.Context().Value(utils.DatabaseKey).(*gorm.DB)
 	sm := r.Context().Value(utils.SessionManagerKey).(*sessions.SessionManager)
+	loc := r.Context().Value(utils.LocationKey).(string)
 
 	var body struct {
 		RegistrationID string `json:"registration_id"`
@@ -53,22 +52,44 @@ func createSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var student models.Student
-	if err := db.First(&student, "registration_id = ?", body.RegistrationID).Error; err != nil {
-		var staffMember models.StaffMember
-		if err := db.First(&staffMember, "registration_id = ?", body.RegistrationID).Error; err != nil {
+	var person models.Person
+	if err := db.First(&person, "registration_id = ?", body.RegistrationID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
 			http.Error(w, "No one with given RegistrationID exists", http.StatusNotFound)
+			return
+		} else {
+			http.Error(w, "Couldn't create or end session", http.StatusInternalServerError)
 			return
 		}
 	}
 
-	s := sessions.Session{
+	session_id := fmt.Sprintf("%s-%s", body.RegistrationID, loc)
+
+	s, err := sm.GetSession(session_id)
+	if err == nil && s != nil {
+		// Session already exists!
+		err := endSession(t, sm, session_id)
+		if err != nil {
+			http.Error(w, "Couldn't end session", http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Done"))
+		return
+	}
+
+	// Session doesn't already exist
+	s = &sessions.Session{
+		SessionID:      session_id,
 		RegistrationID: body.RegistrationID,
 		EntryTime:      time.Now(),
+		Location:       loc,
 	}
-	err := sm.CreateSession(s)
+
+	err = sm.CreateSession(*s)
 	if err != nil {
-		http.Error(w, "Couldn't create session record", http.StatusInternalServerError)
+		http.Error(w, "Couldn't create or end session", http.StatusInternalServerError)
 		return
 	}
 
@@ -79,39 +100,27 @@ func createSession(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
-func deleteSession(w http.ResponseWriter, r *http.Request) {
-	db := r.Context().Value(utils.DatabaseKey).(*gorm.DB)
-	sm := r.Context().Value(utils.SessionManagerKey).(*sessions.SessionManager)
-
-	s, err := sm.GetSession(chi.URLParam(r, "reg_id"))
+func endSession(
+	t *tsdb.TSDB,
+	sm *sessions.SessionManager,
+	session_id string,
+) error {
+	s, err := sm.GetSession(session_id)
 	if err != nil {
-		if err == redis.Nil {
-			http.Error(w, "Session doesn't exist", http.StatusNotFound)
-			return
-		} else {
-			http.Error(w, "Couldn't get session record", http.StatusInternalServerError)
-			return
-		}
+		// Session doesn't already exist
+		return err
 	}
 
-	err = db.Save(&models.Session{
-		SessionID:      uuid.NewString(),
-		RegistrationID: s.RegistrationID,
-		EntryTime:      s.EntryTime,
-		ExitTime:       time.Now(),
-	}).Error
+	// Session already exists!
+	err = t.WriteSessionData(s)
 	if err != nil {
-		http.Error(w, "Couldn't delete session record", http.StatusInternalServerError)
-		return
+		return err
 	}
 
-	err = sm.DeleteSession(chi.URLParam(r, "reg_id"))
+	err = sm.DeleteSession(session_id)
 	if err != nil {
-		http.Error(w, "Couldn't delete session record", http.StatusInternalServerError)
-		return
+		return err
 	}
 
-	w.Header().Add("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Done"))
+	return nil
 }

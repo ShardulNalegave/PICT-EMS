@@ -19,7 +19,7 @@ func ConnectToDatabase() *gorm.DB {
 
 	db.AutoMigrate(&models.Student{})
 	db.AutoMigrate(&models.StaffMember{})
-	db.AutoMigrate(&models.Session{})
+	db.AutoMigrate(&models.Person{})
 
 	log.Info().Msg("Connected to Sqlite")
 	return db

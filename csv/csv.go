@@ -25,3 +25,12 @@ func ReadRecords[T any](fp string) ([]*T, error) {
 
 	return records, nil
 }
+
+func ReadRecordsFromString[T any](data string) ([]*T, error) {
+	records := make([]*T, 0)
+	if err := gocsv.UnmarshalString(data, &records); err != nil {
+		return nil, err
+	}
+
+	return records, nil
+}
